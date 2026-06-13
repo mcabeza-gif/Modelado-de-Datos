@@ -1,0 +1,64 @@
+import yfinance as yf
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+from scipy.stats import shapiro, t, kstest
+
+# --- 1. Adquisición y Preparación de Datos ---
+print("1. Descargando datos históricos...")
+tech_tickers = ['AAPL', 'MSFT', 'AMZN', 'GOOGL', 'META', 'NVDA', 'TSLA', 'NFLX']
+data = yf.download(tech_tickers, start='2020-01-01', end='2023-12-31', progress=False)
+close_prices = data['Close']
+log_returns = close_prices.apply(lambda x: pd.Series(np.log(x).diff())).dropna()
+print("   Datos descargados y rendimientos logarítmicos calculados.")
+
+# --- 2. Cálculo del Value at Risk (VaR) Histórico al 99% ---
+print("\n2. Calculando VaR Histórico al 99%...")
+confidence_level = 0.99
+VaR = log_returns.quantile(1 - confidence_level)
+
+print("--- Valor en Riesgo (VaR) Histórico al 99% ---")
+display(VaR.to_frame(name='VaR (Pérdida Máxima Diaria)'))
+
+plt.figure(figsize=(10, 5))
+VaR.plot(kind='bar', color='salmon')
+plt.title('Valor en Riesgo (VaR) Histórico al 99% para Cada Activo')
+plt.xlabel('Activo')
+plt.ylabel('Pérdida Máxima Diaria (Rendimiento Logarítmico)')
+plt.grid(axis='y', linestyle='--', alpha=0.7)
+plt.xticks(rotation=45)
+plt.tight_layout()
+plt.show()
+
+# --- 3. Proyección de Rendimientos 2024: Simulación de Monte Carlo ---
+print("\n3. Realizando Simulación de Monte Carlo para proyecciones de 2024...")
+num_simulations = 10000
+num_trading_days_2024 = 252
+simulated_annual_returns = pd.DataFrame(columns=log_returns.columns)
+
+for ticker in log_returns.columns:
+    historical_returns = log_returns[ticker].values
+    daily_returns_simulated = np.random.choice(historical_returns, size=(num_trading_days_2024, num_simulations), replace=True)
+    cumulative_log_returns_sim = np.sum(daily_returns_simulated, axis=0)
+    cumulative_simple_returns_sim = np.exp(cumulative_log_returns_sim) - 1
+    simulated_annual_returns[ticker] = cumulative_simple_returns_sim
+
+probability_of_growth = (simulated_annual_returns > 0).mean()
+
+print("--- Probabilidad de que los Rendimientos crezcan en 2024 (Simulación Monte Carlo) ---")
+display(probability_of_growth.to_frame(name='Probabilidad de Crecimiento'))
+
+for ticker in simulated_annual_returns.columns:
+    plt.figure(figsize=(10, 5))
+    sns.histplot(simulated_annual_returns[ticker], bins=50, kde=True, color='skyblue')
+    plt.title(f'Distribución de Rendimientos Anuales Simulados para 2024: {ticker}')
+    plt.xlabel('Rendimiento Anual Simulado')
+    plt.ylabel('Frecuencia / Densidad')
+    plt.axvline(0, color='red', linestyle='--', label='Rendimiento Cero')
+    plt.legend()
+    plt.grid(True)
+    plt.tight_layout()
+    plt.show()
+
+print("\nFlujo de trabajo consolidado completado.")
